@@ -1,1 +1,11 @@
 pandas
+matplotlib
+numpy
+seaborn
+wordcloud
+scikit-learn
+nltk
+transformers
+torch
+tqdm
+spacy
