@@ -1,0 +1,7 @@
+We will not use Vader since it can only work with english languge.
+    - we would need to translate the text first.#
+
+We wwill continoue with Bert German
+https://huggingface.co/oliverguhr/german-sentiment-bert
+
+
