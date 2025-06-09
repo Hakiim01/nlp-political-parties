@@ -4,4 +4,24 @@ We will not use Vader since it can only work with english languge.
 We wwill continoue with Bert German
 https://huggingface.co/oliverguhr/german-sentiment-bert
 
+adding date month and year and export into a scv file
+
+pip install germansentiment
+
+https://github.com/KarstenAMF/GerVADER
+
+why the neutral is zero in the compund = to map it to zero.
+
+calculating varianze in the sentiments of individal sentences to maybe show how much chaos is in the speech.
+compund sentiment
+compound variance
+
+While the compound score summarizes the overall sentiment direction (e.g., positive vs. negative), the compound variance can tell you:
+
+🔍 How consistent the sentiment is across the speech.
+
+Low variance → sentiment is steady (e.g., always neutral or consistently positive)
+
+High variance → sentiment fluctuates (e.g., some parts positive, others negative)
+
 
