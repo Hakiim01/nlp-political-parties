@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import os
 import plotly.express as px
+from streamlit_plotly_events import plotly_events
 
 st.markdown("""
     <link rel="stylesheet" href="https://unpkg.com/carbon-components/css/carbon-components.min.css">
@@ -30,6 +31,7 @@ def load_data(path):
     df["Speaker_name"] = df["Speaker_name"].astype("category")
     df["Speaker_gender"] = df["Speaker_gender"].astype("category")
     df["Speaker_party"] = df["Speaker_party"].astype("category")
+    df["Title"] = df["Title"].astype(str)
     #df.drop(columns=["Unnamed: 0"],inplace=True)
     
     return df
@@ -43,87 +45,69 @@ st.subheader("📄 Raw Data Preview")
 st.dataframe(df.head())
 
 
+# Extract and sort unique dates
+available_dates = sorted(df["Date"].dt.date.unique().tolist())
 
-
-
-# Ensure datetime and session_id
-df["Title"] = df["Title"].astype(str)
-
-# Get one row per session (first timestamp)
-session_starts = df.sort_values("Date").groupby("Title").first().reset_index()
-
-# Plot: 1D time series with sessions on y-axis
-fig = px.scatter(
-    session_starts,
-    x="Date",
-    y=[""] * len(session_starts),  # blank y-axis for 1D look
-    hover_name="Subcorpus",
-    custom_data=["Title"],
-    title="🕓 Session Timeline (Click to Select)"
+# --- Select a date range from available dates only ---
+st.subheader("📆 Select Date Range")
+date_range = st.select_slider(
+    "Select session date range",
+    options=available_dates,
+    value=(available_dates[0], available_dates[-1])
 )
-fig.update_traces(marker=dict(size=10,symbol="diamond"), mode="markers")
-fig.update_yaxes(visible=True)
-fig.update_layout(height=150)
 
-selected_session = st.plotly_chart(fig, use_container_width=True)
-
-# NOTE: Plotly doesn't natively support click events in Streamlit.
-# So next best: add a selectbox to choose session_id.
-selected = st.selectbox("🎯 Select a session to explore", session_starts["Title"])
-session_df = df[df["Title"] == selected]
+# --- Filter DataFrame based on selected range ---
+start_date, end_date = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1])
+filtered_df = df[(df["Date"] >= start_date) & (df["Date"] <= end_date)]
 
 
 
-st.subheader("📉 Drill-Down Line Chart (Index-Based with Table Sync)")
 
-df = session_df.copy()
+import streamlit as st
+import pandas as pd
+import plotly.express as px
 
-# --- Detect column types ---
+# Assume df is loaded
+
+st.subheader("📉 Multi Group-By Filters")
+df = filtered_df.copy()
 numeric_cols = df.select_dtypes(include="number").columns.tolist()
 cat_cols = df.select_dtypes(include=["object", "category"]).columns.tolist()
 
-if numeric_cols:
-    y_col = st.selectbox("📈 Value Column (Y-axis)", numeric_cols)
-    group_col = st.selectbox("🧩 Group By (Optional)", ["(None)"] + cat_cols)
+if numeric_cols and cat_cols:
+    y_col = st.sidebar.selectbox("📈 Value Column (Y-axis)", numeric_cols)
+    group_filters = st.sidebar.multiselect("Select Group-By Filters (multiple)", options=cat_cols)
 
-    # Filter by group if selected
-    if group_col != "(None)":
-        group_values = df[group_col].dropna().unique().tolist()
-        selected_groups = st.multiselect(f"Filter {group_col}", group_values, default=group_values)
-        df = df[df[group_col].isin(selected_groups)]
+    filtered_df = df.copy()
+    for group_col in group_filters:
+        unique_vals = filtered_df[group_col].dropna().unique().tolist()
+        selected_vals = st.sidebar.multiselect(f"Filter {group_col}", unique_vals, default=unique_vals)
+        filtered_df = filtered_df[filtered_df[group_col].isin(selected_vals)]
 
-    # --- Plotly line chart using index ---
-    fig = px.line(
-        df,
-        x=df.index,
+    facet_row = group_filters[1] if len(group_filters) > 1 else None
+    facet_col = group_filters[2] if len(group_filters) > 2 else None
+    color_col = group_filters[0] if group_filters else None
+
+    fig = px.bar(
+        filtered_df,
+        x=filtered_df.index,
         y=y_col,
-        color=group_col if group_col != "(None)" else None,
-        markers=True,
-        title=f"{y_col} over Index" + (f" by {group_col}" if group_col != "(None)" else "")
+        color=color_col,
+        facet_row=facet_row,
+        facet_col=facet_col,
+        title=f"{y_col} over Index"
     )
-    fig.update_layout(xaxis_title="Index", legend_title_text=group_col if group_col != "(None)" else "")
+    fig.update_layout(
+        xaxis_title="Index",
+        legend_title_text=color_col if color_col else "",
+        height=600
+    )
 
-    # Display chart and capture zoom/pan range
-    chart_output = st.plotly_chart(fig, use_container_width=True)
-    zoom_data = st.session_state.get("zoom_data")
-
-    # Capture zoom events (requires st.session_state + workaround below)
-    zoom_event = st.plotly_chart(fig, use_container_width=True, key="chart_with_events")
-
-    if "plotly_relayoutData" in st.session_state:
-        relayout = st.session_state.plotly_relayoutData
-        if "xaxis.range[0]" in relayout and "xaxis.range[1]" in relayout:
-            x_min = int(float(relayout["xaxis.range[0]"]))
-            x_max = int(float(relayout["xaxis.range[1]"]))
-            filtered_view = df.loc[(df.index >= x_min) & (df.index <= x_max)]
-        else:
-            filtered_view = df
-    else:
-        filtered_view = df
-
-    st.subheader("🧾 Filtered Data View (Matches Chart Zoom)")
-    st.dataframe(filtered_view)
+    st.plotly_chart(fig, use_container_width=True)
+    st.subheader("🧾 Filtered Data")
+    st.dataframe(filtered_df)
 
 else:
-    st.warning("Your dataset must have at least one numeric column.")
+    st.warning("Your dataset must have at least one numeric and one categorical column.")
+
 
