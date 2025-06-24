@@ -24,4 +24,19 @@ Low variance → sentiment is steady (e.g., always neutral or consistently posit
 
 High variance → sentiment fluctuates (e.g., some parts positive, others negative)
 
+we are using the auto tokenizer from the model
+
+❗ Avoid These:
+❌ Lowercasing (already handled if needed)
+
+❌ Stopword removal
+
+❌ Lemmatization or stemming
+
+❌ Removing punctuation
+
+Those steps would distort the context that BERT relies on for meaning.
+
+- we take 2020 - 2022
+----------------------------------------------------------
 
