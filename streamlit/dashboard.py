@@ -35,7 +35,11 @@ def load_data(path):
     df["Speaker_party"] = df["Speaker_party"].astype("category")
     df["Title"] = df["Title"].astype(str)
     #df.drop(columns=["Unnamed: 0"],inplace=True)
-    
+    df_wc = pd.read_csv("data/corpus_cleaned.csv")
+    df_wc.rename(columns={"text":"lemma_text"},inplace=True)
+    df_wc = df_wc[["lemma_text","ID"]]
+    df = pd.merge(df, df_wc, on='ID')
+    #df.to_csv("2020_22_Sentiment_base_with_topics_lemma.csv")
     return df
 
 # Load data with spinner (built into @st.cache_data)
@@ -68,7 +72,7 @@ filtered_df = df[(df["Date"] >= start_date) & (df["Date"] <= end_date)]
 
 # Assume df is loaded and filtered_df is ready from your date range code above
 
-tab1, tab2, tab3 = st.tabs(["📉 Multi Group-By Bar Chart", "Other Tab", "🧠 Party vs Topic Explorer"])
+tab1, tab2, tab3 = st.tabs(["📉 Multi Group-By Bar Chart", "Word-Cloud", "🧠 Party vs Topic Explorer"])
 
 
 with tab1:
@@ -106,7 +110,7 @@ with tab1:
         fig.update_layout(
             xaxis_title="Index",
             legend_title_text=color_col if color_col else "",
-            height=600
+            #height=600
         )
 
         st.plotly_chart(fig, use_container_width=True)
@@ -114,8 +118,80 @@ with tab1:
         st.warning("Your dataset must have at least one numeric and one categorical column.")
 
 with tab2:
+    from wordcloud import WordCloud
+    import matplotlib.pyplot as plt
+
     st.write("This tab is reserved for other visualizations or content.")
-    
+    df_tab2 = filtered_df.copy()
+
+    # --- Topic selection ---
+    st.subheader("✅ Select Topics")
+
+    if "all_topics_selected" not in st.session_state:
+        st.session_state.all_topics_selected = True
+
+    all_topics = sorted(df_tab2["Topic 1"].dropna().unique().tolist())
+
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        if st.button("✅ Select All Topics", key="select_all_topics"):
+            st.session_state.all_topics_selected = True
+        if st.button("❌ Deselect All Topics", key="deselect_all_topics"):
+            st.session_state.all_topics_selected = False
+
+    default_topics = all_topics if st.session_state.all_topics_selected else []
+
+    selected_topics = st.multiselect(
+        "Choose topics to include:",
+        options=all_topics,
+        default=default_topics,
+        key="topic_multiselect_2"
+    )
+
+    # --- Party selection ---
+    st.subheader("🗳️ Select Political Parties")
+    all_parties = sorted(df_tab2["Speaker_party"].dropna().unique().tolist())
+
+    selected_parties = st.multiselect(
+        "Choose political parties to include:",
+        options=all_parties,
+        default=all_parties,
+        key="party_multiselect"
+    )
+
+    # --- Filter data ---
+    df_tab3 = df_tab2[
+        df_tab2["Topic 1"].isin(selected_topics) & 
+        df_tab2["Speaker_party"].isin(selected_parties)
+    ]
+
+    if df_tab3.empty:
+        st.warning("No data available after applying filters.")
+    else:
+        # --- Aggregate compound_score ---
+        agg_df = df_tab3.groupby(["Speaker_party", "Topic 1"])["compound_score"].agg(["min", "max", "mean"]).reset_index()
+
+        # --- Generate individual word clouds ---
+        st.subheader("☁️ Word Clouds for Each Selected Party")
+
+        # Create 2 columns for word cloud layout (adjust as needed)
+        cols = st.columns(2)
+
+        for i, party in enumerate(selected_parties):
+            party_df = df_tab3[df_tab3["Speaker_party"] == party]
+            party_text = ' '.join(party_df['lemma_text'].dropna())
+
+            if party_text.strip():
+                wordcloud = WordCloud(width=400, height=200, background_color='white').generate(party_text)
+                with cols[i % 2]:  # Alternate between columns
+                    st.markdown(f"**{party}**")
+                    fig, ax = plt.subplots(figsize=(5, 2.5))
+                    ax.imshow(wordcloud, interpolation='bilinear')
+                    ax.axis('off')
+                    st.pyplot(fig)
+            else:
+                with cols[i % 2]:
+                    st.warning(f"No text available for {party}")
 
 with tab3:
     st.header("🧠 Sentiment Analysis by Topic and Party")
@@ -123,7 +199,6 @@ with tab3:
     df_tab3 = filtered_df.copy()
     
     # --- Per-column filters ---
-    st.subheader("🎛️ Filter by Attributes")
     all_cat_cols = df_tab3.select_dtypes(include=["object", "category"]).columns.tolist()
     all_cat_cols = [col for col in all_cat_cols if col not in ["text", "Topic 1"]]  # Exclude long text and topic
 
