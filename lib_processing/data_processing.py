@@ -8,7 +8,6 @@ import os
 def get_data(base_path = './data/parlamint_at_extracted/ParlaMint-AT.txt'):
     """
     Function to retrieve data from a source.
-    This is a placeholder function and should be implemented with actual data retrieval logic.
     """
     print(f"Retrieving data from ParlaMint-AT...")
     with tarfile.open('./data/ParlaMint-AT.tgz', 'r:gz') as tar:
